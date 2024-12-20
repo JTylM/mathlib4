@@ -261,6 +261,7 @@ lemma germ_stalkClosedPointIso_hom :
       (Scheme.ΓSpecIso R).hom := by
   rw [← ΓSpecIso_hom_stalkClosedPointIso_inv, Category.assoc, Iso.inv_hom_id, Category.comp_id]
 
+-- TODO rename
 lemma Spec_stalkClosedPointIso :
     Spec.map (stalkClosedPointIso R).inv = (Spec R).fromSpecStalk (closedPoint R) := by
   rw [stalkClosedPointIso_inv, Spec.fromSpecStalk_eq']
