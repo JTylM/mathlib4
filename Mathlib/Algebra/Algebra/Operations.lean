@@ -3,14 +3,17 @@ Copyright (c) 2019 Kenny Lau. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Kenny Lau
 -/
-import Mathlib.Algebra.Algebra.Bilinear
-import Mathlib.Algebra.Algebra.Opposite
-import Mathlib.Algebra.Group.Pointwise.Set.BigOperators
-import Mathlib.Algebra.Module.Submodule.Pointwise
-import Mathlib.Algebra.Ring.NonZeroDivisors
-import Mathlib.Data.Set.Semiring
-import Mathlib.GroupTheory.GroupAction.SubMulAction.Pointwise
-import Mathlib.Algebra.Group.Pointwise.Finset.Basic
+module
+
+public import Mathlib.Algebra.Algebra.Bilinear
+public import Mathlib.Algebra.Algebra.Opposite
+public import Mathlib.Algebra.Group.Pointwise.Finset.Basic
+public import Mathlib.Algebra.Group.Pointwise.Set.BigOperators
+public import Mathlib.Algebra.Module.Submodule.Pointwise
+public import Mathlib.Algebra.Ring.NonZeroDivisors
+public import Mathlib.Algebra.Ring.Submonoid.Pointwise
+public import Mathlib.Data.Set.Semiring
+public import Mathlib.GroupTheory.GroupAction.SubMulAction.Pointwise
 
 /-!
 # Multiplication and division of submodules of an algebra.
@@ -29,10 +32,10 @@ Let `R` be a commutative ring (or semiring) and let `A` be an `R`-algebra.
 
 It is proved that `Submodule R A` is a semiring, and also an algebra over `Set A`.
 
-Additionally, in the `Pointwise` locale we promote `Submodule.pointwiseDistribMulAction` to a
+Additionally, in the `Pointwise` scope we promote `Submodule.pointwiseDistribMulAction` to a
 `MulSemiringAction` as `Submodule.pointwiseMulSemiringAction`.
 
-When `R` is not necessarily commutative, and `A` is merely a `R`-module with a ring structure
+When `R` is not necessarily commutative, and `A` is merely an `R`-module with a ring structure
 such that `IsScalarTower R A A` holds (equivalent to the data of a ring homomorphism `R →+* A`
 by `ringHomEquivModuleIsScalarTower`), we can still define `1 : Submodule R A` and
 `Mul (Submodule R A)`, but `1` is only a left identity, not necessarily a right one.
@@ -41,6 +44,8 @@ by `ringHomEquivModuleIsScalarTower`), we can still define `1 : Submodule R A` a
 
 multiplication of submodules, division of submodules, submodule semiring
 -/
+
+@[expose] public section
 
 
 universe uι u v
@@ -68,10 +73,10 @@ section Module
 variable {R : Type u} [Semiring R] {A : Type v} [Semiring A] [Module R A]
 
 -- TODO: Why is this in a file about `Algebra`?
-/-- `1 : Submodule R A` is the submodule `R ∙ 1` of A.
-TODO: potentially change this back to `LinearMap.range (Algebra.linearMap R A)`
-once a version of `Algebra` without the `commutes'` field is introduced.
-See issue https://github.com/leanprover-community/mathlib4/issues/18110.
+-- TODO: potentially change this back to `LinearMap.range (Algebra.linearMap R A)`
+-- once a version of `Algebra` without the `commutes'` field is introduced.
+-- See issue https://github.com/leanprover-community/mathlib4/issues/18110.
+/-- `1 : Submodule R A` is the submodule `R ∙ 1` of `A`.
 -/
 instance one : One (Submodule R A) :=
   ⟨LinearMap.range (LinearMap.toSpanSingleton R A 1)⟩
@@ -93,6 +98,9 @@ theorem one_eq_span_one_set : (1 : Submodule R A) = span R 1 :=
 @[simp]
 theorem one_le {P : Submodule R A} : (1 : Submodule R A) ≤ P ↔ (1 : A) ∈ P := by
   simp [one_eq_span]
+
+instance : AddCommMonoidWithOne (Submodule R A) where
+  add_comm := sup_comm
 
 variable {M : Type*} [AddCommMonoid M] [Module R M] [Module A M] [IsScalarTower R A M]
 
@@ -177,7 +185,7 @@ protected theorem smul_assoc {B} [Semiring B] [Module R B] [Module A B] [Module 
       fun m₁ m₂ ↦ (smul_add r m₁ m₂) ▸ add_mem)
 
 theorem smul_iSup {ι : Sort*} {I : Submodule R A} {t : ι → Submodule R M} :
-    I • (⨆ i, t i)= ⨆ i, I • t i :=
+    I • (⨆ i, t i) = ⨆ i, I • t i :=
   toAddSubmonoid_injective <| by
     simp only [smul_toAddSubmonoid, iSup_toAddSubmonoid, AddSubmonoid.smul_iSup]
 
@@ -245,15 +253,11 @@ protected theorem one_mul : (1 : Submodule R A) * M = M :=
 
 variable {M}
 
-@[mono]
-theorem mul_le_mul (hmp : M ≤ P) (hnq : N ≤ Q) : M * N ≤ P * Q :=
-  smul_mono hmp hnq
+instance : MulLeftMono (Submodule R A) where
+  elim _M _N _P hNP := smul_mono_right _ hNP
 
-theorem mul_le_mul_left (h : M ≤ N) : M * P ≤ N * P :=
-  smul_mono_left h
-
-theorem mul_le_mul_right (h : N ≤ P) : M * N ≤ M * P :=
-  smul_mono_right _ h
+instance : MulRightMono (Submodule R A) where
+  elim _ _ _ := smul_mono_left
 
 theorem mul_comm_of_commute (h : ∀ m ∈ M, ∀ n ∈ N, Commute m n) : M * N = N * M :=
   toAddSubmonoid_injective <| AddSubmonoid.mul_comm_of_commute h
@@ -294,6 +298,11 @@ instance : NonUnitalSemiring (Submodule R A) where
 instance : Pow (Submodule R A) ℕ where
   pow s n := npowRec n s
 
+theorem mul_top_eq_top_of_mul_eq_one (h : N * P = 1) : N * ⊤ = ⊤ :=
+  top_unique <| by
+    conv_lhs => rw [← Submodule.one_mul ⊤, ← h, mul_assoc]
+    exact smul_mono le_rfl le_top
+
 theorem pow_eq_npowRec {n : ℕ} : M ^ n = npowRec n M := rfl
 
 protected theorem pow_zero : M ^ 0 = 1 := rfl
@@ -306,9 +315,14 @@ protected theorem pow_add {m n : ℕ} (h : n ≠ 0) : M ^ (m + n) = M ^ m * M ^ 
 protected theorem pow_one : M ^ 1 = M := by
   rw [Submodule.pow_succ, Submodule.pow_zero, Submodule.one_mul]
 
-/-- `Submodule.pow_succ` with the right hand side commuted. -/
+/-- `Submodule.pow_succ` with the right-hand side commuted. -/
 protected theorem pow_succ' {n : ℕ} (h : n ≠ 0) : M ^ (n + 1) = M * M ^ n := by
   rw [add_comm, M.pow_add h, Submodule.pow_one]
+
+@[simp]
+theorem bot_pow : ∀ {n : ℕ}, n ≠ 0 → (⊥ : Submodule R A) ^ n = ⊥
+  | 1, _ => Submodule.pow_one _
+  | n + 2, _ => by rw [Submodule.pow_succ, bot_pow n.succ_ne_zero, bot_mul]
 
 theorem pow_toAddSubmonoid {n : ℕ} (h : n ≠ 0) : (M ^ n).toAddSubmonoid = M.toAddSubmonoid ^ n := by
   induction n with
@@ -352,7 +366,7 @@ variable (S T : Set A) {M N P Q : Submodule R A} {m n : A}
 
 theorem one_eq_range : (1 : Submodule R A) = LinearMap.range (Algebra.linearMap R A) := by
   rw [one_eq_span, LinearMap.span_singleton_eq_range,
-    LinearMap.toSpanSingleton_eq_algebra_linearMap]
+    LinearMap.toSpanSingleton_one_eq_algebraLinearMap]
 
 theorem algebraMap_mem (r : R) : algebraMap R A r ∈ (1 : Submodule R A) := by
   simp [one_eq_range]
@@ -360,6 +374,13 @@ theorem algebraMap_mem (r : R) : algebraMap R A r ∈ (1 : Submodule R A) := by
 @[simp]
 theorem mem_one {x : A} : x ∈ (1 : Submodule R A) ↔ ∃ y, algebraMap R A y = x := by
   simp [one_eq_range]
+
+theorem smul_one_eq_span (x : A) : x • (1 : Submodule R A) = span R {x} := by
+  rw [one_eq_span, smul_span, smul_set_singleton, smul_eq_mul, mul_one]
+
+theorem span_singleton_algebraMap_of_isUnit {r : R} (h : IsUnit r) :
+    span R {algebraMap R A r} = 1 := by
+  conv_rhs => rw [one_eq_span, ← span_singleton_smul_eq h, ← algebraMap_eq_smul_one]
 
 protected theorem map_one {A'} [Semiring A'] [Algebra R A'] (f : A →ₐ[R] A') :
     map f.toLinearMap (1 : Submodule R A) = 1 := by
@@ -436,7 +457,7 @@ theorem map_op_mul :
   · simp_rw [map_le_iff_le_comap]
     refine mul_le.2 fun m hm n hn => ?_
     rw [mem_comap, map_equiv_eq_comap_symm, map_equiv_eq_comap_symm]
-    show op n * op m ∈ _
+    change op n * op m ∈ _
     exact mul_mem_mul hn hm
   · refine mul_le.2 (MulOpposite.rec' fun m hm => MulOpposite.rec' fun n hn => ?_)
     rw [Submodule.mem_map_equiv] at hm hn ⊢
@@ -522,41 +543,29 @@ theorem mem_span_mul_finite_of_mem_mul {P Q : Submodule R A} {x : A} (hx : x ∈
 variable {M N P}
 
 theorem mem_span_singleton_mul {x y : A} : x ∈ span R {y} * P ↔ ∃ z ∈ P, y * z = x := by
-  simp_rw [mul_eq_map₂, (· * ·), map₂_span_singleton_eq_map]
-  rfl
+  simp_rw [mul_eq_map₂, map₂_span_singleton_eq_map, mem_map, LinearMap.mul_apply_apply]
 
 theorem mem_mul_span_singleton {x y : A} : x ∈ P * span R {y} ↔ ∃ z ∈ P, z * y = x := by
-  simp_rw [mul_eq_map₂, (· * ·), map₂_span_singleton_eq_map_flip]
-  rfl
+  simp_rw [mul_eq_map₂, map₂_span_singleton_eq_map_flip, mem_map, LinearMap.flip_apply,
+    LinearMap.mul_apply_apply]
 
 lemma span_singleton_mul {x : A} {p : Submodule R A} :
     Submodule.span R {x} * p = x • p := ext fun _ ↦ mem_span_singleton_mul
 
-lemma mem_smul_iff_inv_mul_mem {S} [Field S] [Algebra R S] {x : S} {p : Submodule R S} {y : S}
-    (hx : x ≠ 0) : y ∈ x • p ↔ x⁻¹ * y ∈ p := by
+lemma mem_smul_iff_inv_mul_mem {S} [DivisionSemiring S] [Algebra R S] {x : S} {p : Submodule R S}
+    {y : S} (hx : x ≠ 0) : y ∈ x • p ↔ x⁻¹ * y ∈ p := by
   constructor
   · rintro ⟨a, ha : a ∈ p, rfl⟩; simpa [inv_mul_cancel_left₀ hx]
   · exact fun h ↦ ⟨_, h, by simp [mul_inv_cancel_left₀ hx]⟩
 
-lemma mul_mem_smul_iff {S} [CommRing S] [Algebra R S] {x : S} {p : Submodule R S} {y : S}
+lemma mul_mem_smul_iff {S} [Ring S] [Algebra R S] {x : S} {p : Submodule R S} {y : S}
     (hx : x ∈ nonZeroDivisors S) :
-    x * y ∈ x • p ↔ y ∈ p :=
-  show Exists _ ↔ _ by simp [mul_cancel_left_mem_nonZeroDivisors hx]
+    x * y ∈ x • p ↔ y ∈ p := by
+  simp [mem_smul_pointwise_iff_exists, mul_cancel_left_mem_nonZeroDivisors hx]
 
 variable (M N) in
-theorem mul_smul_mul_eq_smul_mul_smul (x y : R) : (x * y) • (M * N) = (x • M) * (y • N) := by
-  ext
-  refine ⟨?_, fun hx ↦ Submodule.mul_induction_on hx ?_ fun _ _ hx hy ↦ Submodule.add_mem _ hx hy⟩
-  · rintro ⟨_, hx, rfl⟩
-    rw [DistribMulAction.toLinearMap_apply]
-    refine Submodule.mul_induction_on hx (fun m hm n hn ↦ ?_) (fun _ _ hn hm ↦ ?_)
-    · rw [mul_smul_mul_comm]
-      exact mul_mem_mul (smul_mem_pointwise_smul m x M hm) (smul_mem_pointwise_smul n y N hn)
-    · rw [smul_add]
-      exact Submodule.add_mem _ hn hm
-  · rintro _ ⟨m, hm, rfl⟩ _ ⟨n, hn, rfl⟩
-    simp_rw [DistribMulAction.toLinearMap_apply, smul_mul_smul_comm]
-    exact smul_mem_pointwise_smul _ _ _ (mul_mem_mul hm hn)
+theorem mul_smul_mul_eq_smul_mul_smul (x y : R) : (x * y) • (M * N) = (x • M) * (y • N) :=
+  mul_smul_mul_comm x y M N
 
 /-- Sub-R-modules of an R-algebra form an idempotent semiring. -/
 instance idemSemiring : IdemSemiring (Submodule R A) where
@@ -564,6 +573,8 @@ instance idemSemiring : IdemSemiring (Submodule R A) where
   one_mul := Submodule.one_mul
   mul_one := Submodule.mul_one
   bot_le _ := bot_le
+
+instance : IsOrderedRing (Submodule R A) where
 
 variable (M)
 
@@ -573,6 +584,11 @@ theorem span_pow (s : Set A) : ∀ n : ℕ, span R s ^ n = span R (s ^ n)
 
 theorem pow_eq_span_pow_set (n : ℕ) : M ^ n = span R ((M : Set A) ^ n) := by
   rw [← span_pow, span_eq]
+
+theorem top_mul_eq_top_of_mul_eq_one (h : N * P = 1) : ⊤ * P = ⊤ :=
+  top_unique <| by
+    conv_lhs => rw [← mul_one ⊤, ← h, ← mul_assoc]
+    exact smul_mono_left le_top
 
 /-- Dependent version of `Submodule.pow_induction_on_left`. -/
 @[elab_as_elim]
@@ -691,6 +707,42 @@ def span.ringHom : SetSemiring A →+* Submodule R A where
   map_add' := span_union
   map_mul' s t := by simp_rw [SetSemiring.down_mul, span_mul_span]
 
+variable (R) in
+/-- `(span R {·})` as a `MonoidWithZeroHom`. -/
+def spanSingleton : A →*₀ Submodule R A where
+  __ := Submodule.span.ringHom.toMonoidHom.comp SetSemiring.singletonMonoidHom
+  map_zero' := by simp [SetSemiring.singletonMonoidHom]
+
+@[simp] lemma spanSingleton_apply (x : A) : spanSingleton R x = Submodule.span R {x} := rfl
+
+section FaithfulSMul
+
+variable [FaithfulSMul R A]
+
+theorem span_singleton_eq_one_iff {x : A} : span R {x} = 1 ↔ ∃ r : Rˣ, x = algebraMap R A r where
+  mp h := by
+    obtain ⟨r, rfl⟩ := mem_one.mp (h ▸ mem_span_singleton_self x)
+    have ⟨r', eq⟩ := mem_span_singleton.mp (h ▸ algebraMap_mem 1)
+    rw [Algebra.smul_def, ← map_mul, (FaithfulSMul.algebraMap_injective R A).eq_iff] at eq
+    exact ⟨.mkOfMulEqOne _ _ (mul_comm _ r ▸ eq), rfl⟩
+  mpr := by rintro ⟨r, rfl⟩; exact span_singleton_algebraMap_of_isUnit r.isUnit
+
+theorem mker_spanSingleton :
+    MonoidHom.mker (Submodule.spanSingleton R) = (IsUnit.submonoid R).map (algebraMap R A) := by
+  ext; simp_rw [Submonoid.mem_map, IsUnit.mem_submonoid_iff, IsUnit, existsAndEq, true_and, eq_comm]
+  exact span_singleton_eq_one_iff
+
+/-- Exactness of the sequence `1 → Rˣ → Aˣ → (Submodule R A)ˣ → Pic R → Pic A` at `Aˣ`.
+See Exercise I.3.7(iv) in [Weibel2013] or Theorem 2.4 in [RobertsSingh1993]. -/
+/- Note: `assert_not_exists Submodule.hasQuotient` in `Mathlib.RingTheory.Ideal.Operations`
+forbids importing `Function.MulExact` into this file. -/
+theorem ker_unitsMap_spanSingleton :
+    (Units.map (Submodule.spanSingleton R).toMonoidHom).ker =
+    (Units.map (algebraMap R A).toMonoidHom).range := by
+  ext; simpa [Units.ext_iff, eq_comm] using span_singleton_eq_one_iff
+
+end FaithfulSMul
+
 section
 
 variable {α : Type*} [Monoid α] [MulSemiringAction α A] [SMulCommClass α R A]
@@ -744,7 +796,7 @@ theorem prod_span_singleton {ι : Type*} (s : Finset ι) (x : ι → A) :
 variable (R A)
 
 /-- R-submodules of the R-algebra A are a module over `Set A`. -/
-instance moduleSet : Module (SetSemiring A) (Submodule R A) where
+noncomputable instance moduleSet : Module (SetSemiring A) (Submodule R A) where
   smul s P := span R (SetSemiring.down s) * P
   smul_add _ _ _ := mul_add _ _ _
   add_smul s t P := by
@@ -766,7 +818,7 @@ theorem setSemiring_smul_def (s : SetSemiring A) (P : Submodule R A) :
 theorem smul_le_smul {s t : SetSemiring A} {M N : Submodule R A}
     (h₁ : SetSemiring.down (α := A) s ⊆ SetSemiring.down (α := A) t)
     (h₂ : M ≤ N) : s • M ≤ t • N :=
-  mul_le_mul (span_mono h₁) h₂
+  mul_le_mul' (span_mono h₁) h₂
 
 theorem singleton_smul (a : A) (M : Submodule R A) :
     Set.up ({a} : Set A) • M = M.map (LinearMap.mulLeft R a) := by
@@ -800,10 +852,8 @@ theorem mem_div_iff_forall_mul_mem {x : A} {I J : Submodule R A} : x ∈ I / J �
   Iff.refl _
 
 theorem mem_div_iff_smul_subset {x : A} {I J : Submodule R A} : x ∈ I / J ↔ x • (J : Set A) ⊆ I :=
-  ⟨fun h y ⟨y', hy', xy'_eq_y⟩ => by
-    rw [← xy'_eq_y]
-    apply h
-    assumption, fun h _ hy => h (Set.smul_mem_smul_set hy)⟩
+  ⟨fun h y ⟨y', hy', xy'_eq_y⟩ => by rw [← xy'_eq_y]; exact h _ hy',
+    fun h _ hy => h (Set.smul_mem_smul_set hy)⟩
 
 theorem le_div_iff {I J K : Submodule R A} : I ≤ J / K ↔ ∀ x ∈ I, ∀ z ∈ K, x * z ∈ J :=
   Iff.refl _
@@ -812,17 +862,14 @@ theorem le_div_iff_mul_le {I J K : Submodule R A} : I ≤ J / K ↔ I * K ≤ J 
   rw [le_div_iff, mul_le]
 
 theorem one_le_one_div {I : Submodule R A} : 1 ≤ 1 / I ↔ I ≤ 1 := by
-  constructor; all_goals intro hI
-  · rwa [le_div_iff_mul_le, one_mul] at hI
-  · rwa [le_div_iff_mul_le, one_mul]
+  rw [le_div_iff_mul_le, one_mul]
 
 @[simp]
 theorem one_mem_div {I J : Submodule R A} : 1 ∈ I / J ↔ J ≤ I := by
   rw [← one_le, le_div_iff_mul_le, one_mul]
 
 theorem le_self_mul_one_div {I : Submodule R A} (hI : I ≤ 1) : I ≤ I * (1 / I) := by
-  refine (mul_one I).symm.trans_le ?_
-  apply mul_le_mul_right (one_le_one_div.mpr hI)
+  simpa using mul_le_mul_right (one_le_one_div.mpr hI) _
 
 theorem mul_one_div_le_one {I : Submodule R A} : I * (1 / I) ≤ 1 := by
   rw [Submodule.mul_le]
@@ -835,7 +882,7 @@ theorem mul_one_div_le_one {I : Submodule R A} : I * (1 / I) ≤ 1 := by
 protected theorem map_div {B : Type*} [CommSemiring B] [Algebra R B] (I J : Submodule R A)
     (h : A ≃ₐ[R] B) : (I / J).map h.toLinearMap = I.map h.toLinearMap / J.map h.toLinearMap := by
   ext x
-  simp only [mem_map, mem_div_iff_forall_mul_mem]
+  simp only [mem_map, mem_div_iff_forall_mul_mem, AlgEquiv.toLinearMap_apply]
   constructor
   · rintro ⟨x, hx, rfl⟩ _ ⟨y, hy, rfl⟩
     exact ⟨x * y, hx _ hy, map_mul h x y⟩
@@ -844,9 +891,7 @@ protected theorem map_div {B : Type*} [CommSemiring B] [Algebra R B] (I J : Subm
     obtain ⟨xz, xz_mem, hxz⟩ := hx (h z) ⟨z, hz, rfl⟩
     convert xz_mem
     apply h.injective
-    rw [map_mul, h.apply_symm_apply]
-    simp only [AlgEquiv.toLinearMap_apply] at hxz
-    rw [hxz]
+    rw [map_mul, h.apply_symm_apply, hxz]
 
 end Quotient
 

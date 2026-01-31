@@ -3,12 +3,11 @@ Copyright (c) 2018 Johannes Hölzl. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Johannes Hölzl, Jens Wagemaker, Aaron Anderson
 -/
-import Mathlib.Algebra.BigOperators.Associated
-import Mathlib.Algebra.GroupWithZero.Action.Defs
-import Mathlib.Algebra.Order.Ring.Nat
-import Mathlib.Data.ENat.Basic
-import Mathlib.Data.Multiset.OrderedMonoid
-import Mathlib.RingTheory.UniqueFactorizationDomain.Defs
+module
+
+public import Mathlib.Algebra.BigOperators.Associated
+public import Mathlib.Data.ENat.Basic
+public import Mathlib.RingTheory.UniqueFactorizationDomain.Defs
 
 /-!
 # Basic results un unique factorization monoids
@@ -27,6 +26,8 @@ import Mathlib.RingTheory.UniqueFactorizationDomain.Defs
 * `UniqueFactorizationMonoid.exists_reduced_factors`: in a UFM, we can divide out a common factor
   to get relatively prime elements.
 -/
+
+@[expose] public section
 
 assert_not_exists Field
 
@@ -53,7 +54,7 @@ theorem wellFoundedLT_associates : WellFoundedLT (Associates α) :=
 
 end WfDvdMonoid
 
-theorem WfDvdMonoid.of_wellFoundedLT_associates [CancelCommMonoidWithZero α]
+theorem WfDvdMonoid.of_wellFoundedLT_associates [CommMonoidWithZero α] [IsCancelMulZero α]
     (h : WellFoundedLT (Associates α)) : WfDvdMonoid α :=
   WfDvdMonoid.of_wfDvdMonoid_associates
     ⟨by
@@ -61,30 +62,32 @@ theorem WfDvdMonoid.of_wellFoundedLT_associates [CancelCommMonoidWithZero α]
       ext
       exact Associates.dvdNotUnit_iff_lt⟩
 
-theorem WfDvdMonoid.iff_wellFounded_associates [CancelCommMonoidWithZero α] :
+theorem WfDvdMonoid.iff_wellFounded_associates [CommMonoidWithZero α] [IsCancelMulZero α] :
     WfDvdMonoid α ↔ WellFoundedLT (Associates α) :=
   ⟨by apply WfDvdMonoid.wellFoundedLT_associates, WfDvdMonoid.of_wellFoundedLT_associates⟩
 
-instance Associates.ufm [CancelCommMonoidWithZero α] [UniqueFactorizationMonoid α] :
+instance Associates.ufm [CommMonoidWithZero α] [UniqueFactorizationMonoid α] :
     UniqueFactorizationMonoid (Associates α) :=
   { (WfDvdMonoid.wfDvdMonoid_associates : WfDvdMonoid (Associates α)) with
     irreducible_iff_prime := by
       rw [← Associates.irreducible_iff_prime_iff]
       apply UniqueFactorizationMonoid.irreducible_iff_prime }
 
-theorem prime_factors_unique [CancelCommMonoidWithZero α] :
+theorem prime_factors_unique [CommMonoidWithZero α] [IsCancelMulZero α] :
     ∀ {f g : Multiset α},
       (∀ x ∈ f, Prime x) → (∀ x ∈ g, Prime x) → f.prod ~ᵤ g.prod → Multiset.Rel Associated f g := by
   classical
   intro f
-  induction' f using Multiset.induction_on with p f ih
-  · intros g _ hg h
+  induction f using Multiset.induction_on with
+  | empty =>
+    intro g _ hg h
     exact Multiset.rel_zero_left.2 <|
-      Multiset.eq_zero_of_forall_not_mem fun x hx =>
+      Multiset.eq_zero_of_forall_notMem fun x hx =>
         have : IsUnit g.prod := by simpa [associated_one_iff_isUnit] using h.symm
         (hg x hx).not_unit <|
           isUnit_iff_dvd_one.2 <| (Multiset.dvd_prod hx).trans (isUnit_iff_dvd_one.1 this)
-  · intros g hf hg hfg
+  | cons p f ih =>
+    intro g hf hg hfg
     let ⟨b, hbg, hb⟩ :=
       (exists_associated_mem_of_dvd_prod (hf p (by simp)) fun q hq => hg _ hq) <|
         hfg.dvd_iff_dvd_right.1 (show p ∣ (p ::ₘ f).prod by simp)
@@ -100,23 +103,32 @@ theorem prime_factors_unique [CancelCommMonoidWithZero α] :
 
 namespace UniqueFactorizationMonoid
 
-variable [CancelCommMonoidWithZero α] [UniqueFactorizationMonoid α]
+variable [CommMonoidWithZero α] [UniqueFactorizationMonoid α]
 
 theorem factors_unique {f g : Multiset α} (hf : ∀ x ∈ f, Irreducible x)
     (hg : ∀ x ∈ g, Irreducible x) (h : f.prod ~ᵤ g.prod) : Multiset.Rel Associated f g :=
   prime_factors_unique (fun x hx => UniqueFactorizationMonoid.irreducible_iff_prime.mp (hf x hx))
     (fun x hx => UniqueFactorizationMonoid.irreducible_iff_prime.mp (hg x hx)) h
 
+theorem _root_.Associated.card_factors_eq {a b : α} (h : Associated a b) :
+    (factors a).card = (factors b).card := by
+  by_cases hb : b = 0
+  · simp_all
+  have ha : a ≠ 0 := h.ne_zero_iff.mpr hb
+  apply Multiset.card_eq_card_of_rel
+  apply factors_unique irreducible_of_factor irreducible_of_factor
+  exact (factors_prod ha).trans <| h.trans (factors_prod hb).symm
+
 end UniqueFactorizationMonoid
 
 /-- If an irreducible has a prime factorization,
   then it is an associate of one of its prime factors. -/
-theorem prime_factors_irreducible [CancelCommMonoidWithZero α] {a : α} {f : Multiset α}
+theorem prime_factors_irreducible [CommMonoidWithZero α] {a : α} {f : Multiset α}
     (ha : Irreducible a) (pfa : (∀ b ∈ f, Prime b) ∧ f.prod ~ᵤ a) : ∃ p, a ~ᵤ p ∧ f = {p} := by
   haveI := Classical.decEq α
   refine @Multiset.induction_on _
     (fun g => (g.prod ~ᵤ a) → (∀ b ∈ g, Prime b) → ∃ p, a ~ᵤ p ∧ g = {p}) f ?_ ?_ pfa.2 pfa.1
-  · intro h; exact (ha.not_unit (associated_one_iff_isUnit.1 (Associated.symm h))).elim
+  · intro h; exact (ha.not_isUnit (associated_one_iff_isUnit.1 (Associated.symm h))).elim
   · rintro p s _ ⟨u, hu⟩ hs
     use p
     have hs0 : s = 0 := by
@@ -132,7 +144,8 @@ theorem prime_factors_irreducible [CancelCommMonoidWithZero α] {a : α} {f : Mu
     simp only [mul_one, Multiset.prod_cons, Multiset.prod_zero, hs0] at *
     exact ⟨Associated.symm ⟨u, hu⟩, rfl⟩
 
-theorem irreducible_iff_prime_of_existsUnique_irreducible_factors [CancelCommMonoidWithZero α]
+theorem irreducible_iff_prime_of_existsUnique_irreducible_factors [CommMonoidWithZero α]
+    [IsCancelMulZero α]
     (eif : ∀ a : α, a ≠ 0 → ∃ f : Multiset α, (∀ b ∈ f, Irreducible b) ∧ f.prod ~ᵤ a)
     (uif :
       ∀ f g : Multiset α,
@@ -161,7 +174,6 @@ theorem irreducible_iff_prime_of_existsUnique_irreducible_factors [CancelCommMon
               rw [hx, Multiset.prod_cons]; exact hfx.2.mul_left _
             _ ~ᵤ fa.prod * fb.prod := hfa.2.symm.mul_mul hfb.2.symm
             _ = _ := by rw [Multiset.prod_add]
-
         exact
           let ⟨q, hqf, hq⟩ := Multiset.exists_mem_of_rel_of_mem h (Multiset.mem_cons_self p _)
           (Multiset.mem_add.1 hqf).elim
@@ -171,20 +183,16 @@ theorem irreducible_iff_prime_of_existsUnique_irreducible_factors [CancelCommMon
             Or.inr <| hq.dvd_iff_dvd_left.2 <| hfb.2.dvd_iff_dvd_right.1 (Multiset.dvd_prod hqb)⟩,
     Prime.irreducible⟩
 
-@[deprecated (since := "2024-12-17")]
-alias irreducible_iff_prime_of_exists_unique_irreducible_factors :=
-  irreducible_iff_prime_of_existsUnique_irreducible_factors
-
 namespace UniqueFactorizationMonoid
 
-variable [CancelCommMonoidWithZero α]
+variable [CommMonoidWithZero α]
 variable [UniqueFactorizationMonoid α]
 
 @[simp]
 theorem factors_one : factors (1 : α) = 0 := by
   nontriviality α using factors
   rw [← Multiset.rel_zero_right]
-  refine factors_unique irreducible_of_factor (fun x hx => (Multiset.not_mem_zero x hx).elim) ?_
+  refine factors_unique irreducible_of_factor (fun x hx => (Multiset.notMem_zero x hx).elim) ?_
   rw [Multiset.prod_zero]
   exact factors_prod one_ne_zero
 
@@ -200,14 +208,19 @@ theorem exists_mem_factors_of_dvd {a p : α} (ha0 : a ≠ 0) (hp : Irreducible p
           Multiset.prod (factors a) ~ᵤ a := factors_prod ha0
           _ = p * b := hb
           _ ~ᵤ Multiset.prod (p ::ₘ factors b) := by
-            rw [Multiset.prod_cons]; exact (factors_prod hb0).symm.mul_left _
-          )
+            rw [Multiset.prod_cons]; exact (factors_prod hb0).symm.mul_left _)
   Multiset.exists_mem_of_rel_of_mem this (by simp)
 
 theorem exists_mem_factors {x : α} (hx : x ≠ 0) (h : ¬IsUnit x) : ∃ p, p ∈ factors x := by
   obtain ⟨p', hp', hp'x⟩ := WfDvdMonoid.exists_irreducible_factor h hx
   obtain ⟨p, hp, _⟩ := exists_mem_factors_of_dvd hx hp' hp'x
   exact ⟨p, hp⟩
+
+theorem factors_eq_singleton_of_irreducible {a : α} (ha : Irreducible a) :
+    ∃ b, Associated a b ∧ factors a = {b} := by
+  obtain ⟨b, hbmem, hab⟩ := exists_mem_factors_of_dvd ha.ne_zero ha dvd_rfl
+  exact ⟨b, hab, .symm <| Multiset.eq_of_le_of_card_le (Multiset.singleton_le.mpr hbmem)
+    (by rw [card_factors_of_irreducible ha, Multiset.card_singleton])⟩
 
 open Classical in
 theorem factors_mul {x y : α} (hx : x ≠ 0) (hy : y ≠ 0) :
@@ -223,10 +236,10 @@ theorem factors_mul {x y : α} (hx : x ≠ 0) (hy : y ≠ 0) :
 theorem factors_pow {x : α} (n : ℕ) :
     Multiset.Rel Associated (factors (x ^ n)) (n • factors x) := by
   match n with
-  | 0 => rw [zero_smul, pow_zero, factors_one, Multiset.rel_zero_right]
-  | n+1 =>
+  | 0 => rw [zero_nsmul, pow_zero, factors_one, Multiset.rel_zero_right]
+  | n + 1 =>
     by_cases h0 : x = 0
-    · simp [h0, zero_pow n.succ_ne_zero, smul_zero]
+    · simp [h0, zero_pow n.succ_ne_zero, nsmul_zero]
     · rw [pow_succ', succ_nsmul']
       refine Multiset.Rel.trans _ (factors_mul h0 (pow_ne_zero n h0)) ?_
       refine Multiset.Rel.add ?_ <| factors_pow n
@@ -242,7 +255,7 @@ theorem factors_pos (x : α) (hx : x ≠ 0) : 0 < factors x ↔ ¬IsUnit x := by
     obtain ⟨p, hp⟩ := exists_mem_factors hx h
     exact
       bot_lt_iff_ne_bot.mpr
-        (mt Multiset.eq_zero_iff_forall_not_mem.mp (not_forall.mpr ⟨p, not_not.mpr hp⟩))
+        (mt Multiset.eq_zero_iff_forall_notMem.mp (not_forall.mpr ⟨p, not_not.mpr hp⟩))
 
 open Multiset in
 theorem factors_pow_count_prod [DecidableEq α] {x : α} (hx : x ≠ 0) :
@@ -268,7 +281,7 @@ attribute [local instance] Associated.setoid
 
 open Multiset UniqueFactorizationMonoid
 
-variable [CancelCommMonoidWithZero α] [UniqueFactorizationMonoid α]
+variable [CommMonoidWithZero α] [UniqueFactorizationMonoid α]
 
 theorem unique' {p q : Multiset (Associates α)} :
     (∀ a ∈ p, Irreducible a) → (∀ a ∈ q, Irreducible a) → p.prod = q.prod → p = q := by
@@ -299,7 +312,7 @@ end Associates
 
 section ExistsPrimeFactors
 
-variable [CancelCommMonoidWithZero α]
+variable [CommMonoidWithZero α] [IsCancelMulZero α]
 variable (pf : ∀ a : α, a ≠ 0 → ∃ f : Multiset α, (∀ b ∈ f, Prime b) ∧ f.prod ~ᵤ a)
 include pf
 
@@ -330,7 +343,6 @@ theorem WfDvdMonoid.of_exists_prime_factors : WfDvdMonoid α :=
           _ = Multiset.card (Classical.choose (pf b h)) :=
             Multiset.card_eq_card_of_rel
             (prime_factors_unique ?_ (Classical.choose_spec (pf _ h)).1 ?_)
-
         · convert (Classical.choose_spec (pf c cne0)).2.symm
           rw [con, Multiset.prod_zero]
         · intro x hadd
@@ -357,7 +369,8 @@ theorem UniqueFactorizationMonoid.of_exists_prime_factors : UniqueFactorizationM
 
 end ExistsPrimeFactors
 
-theorem UniqueFactorizationMonoid.iff_exists_prime_factors [CancelCommMonoidWithZero α] :
+theorem UniqueFactorizationMonoid.iff_exists_prime_factors [CommMonoidWithZero α]
+    [IsCancelMulZero α] :
     UniqueFactorizationMonoid α ↔
       ∀ a : α, a ≠ 0 → ∃ f : Multiset α, (∀ b ∈ f, Prime b) ∧ f.prod ~ᵤ a :=
   ⟨fun h => @UniqueFactorizationMonoid.exists_prime_factors _ _ h,
@@ -365,21 +378,22 @@ theorem UniqueFactorizationMonoid.iff_exists_prime_factors [CancelCommMonoidWith
 
 section
 
-variable {β : Type*} [CancelCommMonoidWithZero α] [CancelCommMonoidWithZero β]
+variable {β : Type*} [CommMonoidWithZero α] [CommMonoidWithZero β]
 
 theorem MulEquiv.uniqueFactorizationMonoid (e : α ≃* β) (hα : UniqueFactorizationMonoid α) :
     UniqueFactorizationMonoid β := by
+  have := e.isCancelMulZero_iff.mp inferInstance
   rw [UniqueFactorizationMonoid.iff_exists_prime_factors] at hα ⊢
   intro a ha
   obtain ⟨w, hp, u, h⟩ :=
     hα (e.symm a) fun h =>
       ha <| by
-        convert← map_zero e
+        convert ← map_zero e
         simp [← h]
   exact
     ⟨w.map e, fun b hb =>
         let ⟨c, hc, he⟩ := Multiset.mem_map.1 hb
-        he ▸ e.prime_iff.2 (hp c hc),
+        he ▸ (prime_iff e).2 (hp c hc),
         Units.map e.toMonoidHom u,
       by
         rw [Multiset.prod_hom, toMonoidHom_eq_coe, Units.coe_map, MonoidHom.coe_coe, ← map_mul e, h,
@@ -393,7 +407,7 @@ end
 
 namespace UniqueFactorizationMonoid
 
-theorem of_existsUnique_irreducible_factors [CancelCommMonoidWithZero α]
+theorem of_existsUnique_irreducible_factors [CommMonoidWithZero α] [IsCancelMulZero α]
     (eif : ∀ a : α, a ≠ 0 → ∃ f : Multiset α, (∀ b ∈ f, Irreducible b) ∧ f.prod ~ᵤ a)
     (uif :
       ∀ f g : Multiset α,
@@ -405,10 +419,7 @@ theorem of_existsUnique_irreducible_factors [CancelCommMonoidWithZero α]
       convert eif using 7
       simp_rw [irreducible_iff_prime_of_existsUnique_irreducible_factors eif uif])
 
-@[deprecated (since := "2024-12-17")]
-alias of_exists_unique_irreducible_factors := of_existsUnique_irreducible_factors
-
-variable {R : Type*} [CancelCommMonoidWithZero R] [UniqueFactorizationMonoid R]
+variable {R : Type*} [CommMonoidWithZero R] [UniqueFactorizationMonoid R]
 
 theorem isRelPrime_iff_no_prime_factors {a b : R} (ha : a ≠ 0) :
     IsRelPrime a b ↔ ∀ ⦃d⦄, d ∣ a → d ∣ b → ¬Prime d :=

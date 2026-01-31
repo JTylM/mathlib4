@@ -3,10 +3,11 @@ Copyright (c) 2022 Yury Kudryashov. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Yury Kudryashov
 -/
-import Mathlib.Algebra.Group.Action.Defs
-import Mathlib.Data.Nat.Lattice
-import Mathlib.Data.ENat.Basic
-import Mathlib.Order.SuccPred.CompleteLinearOrder
+module
+
+public import Mathlib.Algebra.Group.Action.Defs
+public import Mathlib.Data.Nat.Lattice
+public import Mathlib.Data.ENat.Basic
 
 /-!
 # Extended natural numbers form a complete linear order
@@ -16,24 +17,17 @@ This instance is not in `Data.ENat.Basic` to avoid dependency on `Finset`s.
 We also restate some lemmas about `WithTop` for `ENat` to have versions that use `Nat.cast` instead
 of `WithTop.some`.
 
-## TODO
-
-Currently (2024-Nov-12), `shake` does not check `proof_wanted` and insist that
-`Mathlib.Algebra.Group.Action.Defs` should not be imported. Once `shake` is fixed, please remove the
-corresponding `noshake.json` entry.
-
 -/
+
+public section
 
 assert_not_exists Field
 
 open Set
 
--- The `CompleteLinearOrder` instance should be constructed by a deriving handler.
--- https://github.com/leanprover-community/mathlib4/issues/380
-
--- `noncomputable` through 'Nat.instConditionallyCompleteLinearOrderBotNat'
-noncomputable instance : CompleteLinearOrder ENat :=
-  inferInstanceAs (CompleteLinearOrder (WithTop ℕ))
+noncomputable section
+deriving instance CompleteLinearOrder for ℕ∞
+end
 
 noncomputable instance : CompleteLinearOrder (WithBot ENat) :=
   inferInstanceAs (CompleteLinearOrder (WithBot (WithTop ℕ)))
@@ -86,16 +80,6 @@ lemma sSup_eq_zero' : sSup s = 0 ↔ s = ∅ ∨ s = {0} :=
 @[simp] lemma iSup_eq_zero : iSup f = 0 ↔ ∀ i, f i = 0 := iSup_eq_bot
 @[simp] lemma iSup_zero : ⨆ _ : ι, (0 : ℕ∞) = 0 := by simp
 
-lemma exists_eq_iInf [Nonempty ι] (f : ι → ℕ∞) : ∃ a, f a = ⨅ x, f x := by
-  obtain htop | hlt := eq_top_or_lt_top (⨅ x, f x)
-  · rw [htop]
-    exact ⟨Classical.arbitrary _, iInf_eq_top.1 htop _⟩
-  apply exists_eq_iInf_of_not_isPredPrelimit
-  simp only [Order.IsPredPrelimit, not_forall, not_not]
-  refine ⟨Order.succ (⨅ x, f x), Order.covBy_succ_of_not_isMax fun hmax ↦ ?_⟩
-  simp only [isMax_iff_eq_top, iInf_eq_top] at hmax
-  simp [hmax] at hlt
-
 lemma sSup_eq_top_of_infinite (h : s.Infinite) : sSup s = ⊤ := by
   apply (sSup_eq_top ..).mpr
   intro x hx
@@ -103,7 +87,6 @@ lemma sSup_eq_top_of_infinite (h : s.Infinite) : sSup s = ⊤ := by
   | top => simp at hx
   | coe x =>
     contrapose! h
-    simp only [not_infinite]
     apply Finite.subset <| Finite.Set.finite_image {n : ℕ | n ≤ x} (fun (n : ℕ) => (n : ℕ∞))
     intro y hy
     specialize h y hy
@@ -122,6 +105,9 @@ lemma sSup_mem_of_nonempty_of_lt_top [Nonempty s] (hs' : sSup s < ⊤) : sSup s 
 lemma exists_eq_iSup_of_lt_top [Nonempty ι] (h : ⨆ i, f i < ⊤) :
     ∃ i, f i = ⨆ i, f i :=
   sSup_mem_of_nonempty_of_lt_top h
+
+lemma exists_eq_iInf [Nonempty ι] (f : ι → ℕ∞) : ∃ a, f a = ⨅ x, f x :=
+  csInf_mem (range_nonempty fun i ↦ f i)
 
 lemma exists_eq_iSup₂_of_lt_top {ι₁ ι₂ : Type*} {f : ι₁ → ι₂ → ℕ∞} [Nonempty ι₁] [Nonempty ι₂]
     (h : ⨆ i, ⨆ j, f i j < ⊤) : ∃ i j, f i j = ⨆ i, ⨆ j, f i j := by
@@ -143,9 +129,11 @@ lemma mul_iSup (a : ℕ∞) (f : ι → ℕ∞) : a * ⨆ i, f i = ⨆ i, a * f 
   cases d with
   | top => simp
   | coe d =>
-  obtain htop | hlt := (le_top (a := ⨆ i, f i)).eq_or_lt
-  · obtain ⟨i, hi : d < f i⟩ := (iSup_eq_top ..).1 htop d (by simp)
-    exact False.elim <| (((h i).trans_lt hi).trans_le (ENat.self_le_mul_left _ hne)).ne rfl
+  have hlt : ⨆ i, f i < ⊤ := by
+    rw [lt_top_iff_ne_top]
+    intro htop
+    obtain ⟨i, hi : d < f i⟩ := (iSup_eq_top ..).1 htop d (by simp)
+    exact (((h i).trans_lt hi).trans_le (ENat.self_le_mul_left _ hne)).false
   obtain ⟨j, hj⟩ := exists_eq_iSup_of_lt_top hlt
   rw [← hj]
   apply h
@@ -160,7 +148,7 @@ lemma sSup_mul : sSup s * a = ⨆ b ∈ s, b * a := by
   simp_rw [mul_comm, mul_sSup]
 
 lemma mul_iInf [Nonempty ι] : a * ⨅ i, f i = ⨅ i, a * f i := by
-  refine (le_iInf fun x ↦ (mul_le_mul_left' (iInf_le ..) a)).antisymm ?_
+  refine (le_iInf fun x ↦ by grw [iInf_le]).antisymm ?_
   obtain ⟨b, hb⟩ := ENat.exists_eq_iInf f
   rw [← hb, iInf_le_iff]
   exact fun x h ↦ h _
@@ -192,7 +180,7 @@ lemma iInf_mul_of_ne (ha₀ : a ≠ 0) : (⨅ i, f i) * a = ⨅ i, f i * a :=
 lemma add_iSup [Nonempty ι] (f : ι → ℕ∞) : a + ⨆ i, f i = ⨆ i, a + f i := by
   obtain rfl | ha := eq_or_ne a ⊤
   · simp
-  refine le_antisymm ?_ <| iSup_le fun i ↦ add_le_add_left (le_iSup ..) _
+  refine le_antisymm ?_ <| iSup_le fun i ↦ by grw [← le_iSup]
   refine add_le_of_le_tsub_left_of_le (le_iSup_of_le (Classical.arbitrary _) le_self_add) ?_
   exact iSup_le fun i ↦ ENat.le_sub_of_add_le_left ha <| le_iSup (a + f ·) i
 
@@ -240,15 +228,17 @@ lemma iSup_add_iSup (h : ∀ i j, ∃ k, f i + g j ≤ f k + g k) : iSup f + iSu
     rcases h i j with ⟨k, hk⟩
     exact le_iSup_of_le k hk
 
-lemma iSup_add_iSup_of_monotone {ι : Type*} [Preorder ι] [IsDirected ι (· ≤ ·)] {f g : ι → ℕ∞}
+lemma iSup_add_iSup_of_monotone {ι : Type*} [Preorder ι] [IsDirectedOrder ι] {f g : ι → ℕ∞}
     (hf : Monotone f) (hg : Monotone g) : iSup f + iSup g = ⨆ a, f a + g a :=
   iSup_add_iSup fun i j ↦ (exists_ge_ge i j).imp fun _k ⟨hi, hj⟩ ↦ by gcongr <;> apply_rules
 
-proof_wanted smul_iSup {R} [SMul R ℕ∞] [IsScalarTower R ℕ∞ ℕ∞] (f : ι → ℕ∞) (c : R) :
-    c • ⨆ i, f i = ⨆ i, c • f i
+lemma smul_iSup {R} [SMul R ℕ∞] [IsScalarTower R ℕ∞ ℕ∞] (f : ι → ℕ∞) (c : R) :
+    c • ⨆ i, f i = ⨆ i, c • f i := by
+  simpa using mul_iSup (c • 1) f
 
-proof_wanted smul_sSup {R} [SMul R ℕ∞] [IsScalarTower R ℕ∞ ℕ∞] (s : Set ℕ∞) (c : R) :
-    c • sSup s = ⨆ a ∈ s, c • a
+lemma smul_sSup {R} [SMul R ℕ∞] [IsScalarTower R ℕ∞ ℕ∞] (s : Set ℕ∞) (c : R) :
+    c • sSup s = ⨆ a ∈ s, c • a := by
+  simp_rw [sSup_eq_iSup, smul_iSup]
 
 lemma sub_iSup [Nonempty ι] (ha : a ≠ ⊤) : a - ⨆ i, f i = ⨅ i, a - f i := by
   obtain ⟨i, hi⟩ | h := em (∃ i, a < f i)

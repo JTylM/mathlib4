@@ -3,13 +3,15 @@ Copyright (c) 2022 Yaël Dillies. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Yaël Dillies
 -/
-import Mathlib.Order.Hom.Basic
+module
+
+public import Mathlib.Order.Hom.Basic
 
 /-!
 # Unbounded lattice homomorphisms
 
 This file defines unbounded lattice homomorphisms. _Bounded_ lattice homomorphisms are defined in
-`Mathlib.Order.Hom.BoundedLattice`.
+`Mathlib/Order/Hom/BoundedLattice.lean`.
 
 We use the `DFunLike` design, so each type of morphisms has a companion typeclass which is meant to
 be satisfied by itself and all stricter types.
@@ -26,6 +28,8 @@ be satisfied by itself and all stricter types.
 * `InfHomClass`
 * `LatticeHomClass`
 -/
+
+@[expose] public section
 
 
 open Function
@@ -63,9 +67,6 @@ structure LatticeHom (α β : Type*) [Lattice α] [Lattice β] extends SupHom α
   Do not use this directly. Use `map_inf` instead. -/
   map_inf' (a b : α) : toFun (a ⊓ b) = toFun a ⊓ toFun b
 
--- TODO: remove this configuration and use the default configuration.
-initialize_simps_projections LatticeHom (+toSupHom, -toFun)
-
 section
 
 /-- `SupHomClass F α β` states that `F` is a type of `⊔`-preserving morphisms.
@@ -102,9 +103,6 @@ section Hom
 
 variable [FunLike F α β]
 
--- Porting note: changes to the typeclass inference system mean that we need to
--- make a lot of changes here, adding `outParams`, changing `[]`s into `{}` and
--- so on.
 -- See note [lower instance priority]
 instance (priority := 100) SupHomClass.toOrderHomClass [SemilatticeSup α] [SemilatticeSup β]
     [SupHomClass F α β] : OrderHomClass F α β :=
@@ -310,7 +308,7 @@ instance [BoundedOrder β] : BoundedOrder (SupHom α β) :=
   BoundedOrder.lift ((↑) : _ → α → β) (fun _ _ => id) rfl rfl
 
 @[simp]
-theorem coe_sup (f g : SupHom α β) : DFunLike.coe (f ⊔ g) = f ⊔ g :=
+theorem coe_sup (f g : SupHom α β) : ⇑(f ⊔ g) = ⇑f ⊔ ⇑g :=
   rfl
 
 @[simp]
@@ -332,6 +330,12 @@ theorem bot_apply [Bot β] (a : α) : (⊥ : SupHom α β) a = ⊥ :=
 @[simp]
 theorem top_apply [Top β] (a : α) : (⊤ : SupHom α β) a = ⊤ :=
   rfl
+
+@[simp] lemma mk_le_mk (toFun₁ toFun₂ : α → β) (map_sup₁ map_sup₂) :
+    mk toFun₁ map_sup₁ ≤ mk toFun₂ map_sup₂ ↔ toFun₁ ≤ toFun₂ := .rfl
+
+@[gcongr]
+alias ⟨_, _root_.GCongr.SupHom.mk_le_mk⟩ := mk_le_mk
 
 /-- `Subtype.val` as a `SupHom`. -/
 def subtypeVal {P : β → Prop}
@@ -486,7 +490,7 @@ instance [BoundedOrder β] : BoundedOrder (InfHom α β) :=
   BoundedOrder.lift ((↑) : _ → α → β) (fun _ _ => id) rfl rfl
 
 @[simp]
-theorem coe_inf (f g : InfHom α β) : DFunLike.coe (f ⊓ g) = f ⊓ g :=
+theorem coe_inf (f g : InfHom α β) : ⇑(f ⊓ g) = ⇑f ⊓ ⇑g :=
   rfl
 
 @[simp]
@@ -508,6 +512,12 @@ theorem bot_apply [Bot β] (a : α) : (⊥ : InfHom α β) a = ⊥ :=
 @[simp]
 theorem top_apply [Top β] (a : α) : (⊤ : InfHom α β) a = ⊤ :=
   rfl
+
+@[simp] lemma mk_le_mk (toFun₁ toFun₂ : α → β) (map_inf₁ map_inf₂) :
+    mk toFun₁ map_inf₁ ≤ mk toFun₂ map_inf₂ ↔ toFun₁ ≤ toFun₂ := .rfl
+
+@[gcongr]
+alias ⟨_, _root_.GCongr.InfHom.mk_le_mk⟩ := mk_le_mk
 
 /-- `Subtype.val` as an `InfHom`. -/
 def subtypeVal {P : β → Prop}
@@ -604,7 +614,7 @@ theorem comp_apply (f : LatticeHom β γ) (g : LatticeHom α β) (a : α) : (f.c
   rfl
 
 @[simp]
--- Porting note: `simp`-normal form of `coe_comp_sup_hom`
+-- `simp`-normal form of `coe_comp_sup_hom`
 theorem coe_comp_sup_hom' (f : LatticeHom β γ) (g : LatticeHom α β) :
     ⟨f ∘ g, map_sup (f.comp g)⟩ = (f : SupHom β γ).comp g :=
   rfl
@@ -614,7 +624,7 @@ theorem coe_comp_sup_hom (f : LatticeHom β γ) (g : LatticeHom α β) :
   rfl
 
 @[simp]
--- Porting note: `simp`-normal form of `coe_comp_inf_hom`
+-- `simp`-normal form of `coe_comp_inf_hom`
 theorem coe_comp_inf_hom' (f : LatticeHom β γ) (g : LatticeHom α β) :
     ⟨f ∘ g, map_inf (f.comp g)⟩ = (f : InfHom β γ).comp g :=
   rfl
@@ -709,8 +719,6 @@ variable [Max α] [Max β] [Max γ]
 protected def dual : SupHom α β ≃ InfHom αᵒᵈ βᵒᵈ where
   toFun f := ⟨f, f.map_sup'⟩
   invFun f := ⟨f, f.map_inf'⟩
-  left_inv _ := rfl
-  right_inv _ := rfl
 
 @[simp]
 theorem dual_id : SupHom.dual (SupHom.id α) = InfHom.id _ :=
@@ -742,8 +750,6 @@ variable [Min α] [Min β] [Min γ]
 protected def dual : InfHom α β ≃ SupHom αᵒᵈ βᵒᵈ where
   toFun f := ⟨f, f.map_inf'⟩
   invFun f := ⟨f, f.map_sup'⟩
-  left_inv _ := rfl
-  right_inv _ := rfl
 
 @[simp]
 theorem dual_id : InfHom.dual (InfHom.id α) = SupHom.id _ :=
@@ -771,12 +777,10 @@ namespace LatticeHom
 variable [Lattice α] [Lattice β] [Lattice γ]
 
 /-- Reinterpret a lattice homomorphism as a lattice homomorphism between the dual lattices. -/
-@[simps]
+@[simps!]
 protected def dual : LatticeHom α β ≃ LatticeHom αᵒᵈ βᵒᵈ where
   toFun f := ⟨InfHom.dual f.toInfHom, f.map_sup'⟩
   invFun f := ⟨SupHom.dual.symm f.toInfHom, f.map_sup'⟩
-  left_inv _ := rfl
-  right_inv _ := rfl
 
 @[simp] theorem dual_id : LatticeHom.dual (LatticeHom.id α) = LatticeHom.id _ := rfl
 

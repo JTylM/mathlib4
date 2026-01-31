@@ -3,10 +3,12 @@ Copyright (c) 2018 Patrick Massot. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Patrick Massot, Johannes Hölzl
 -/
-import Mathlib.Algebra.Algebra.Subalgebra.Basic
-import Mathlib.Analysis.Normed.Group.Constructions
-import Mathlib.Analysis.Normed.Group.Subgroup
-import Mathlib.Analysis.Normed.Group.Submodule
+module
+
+public import Mathlib.Algebra.Algebra.Subalgebra.Basic
+public import Mathlib.Analysis.Normed.Group.Constructions
+public import Mathlib.Analysis.Normed.Group.Subgroup
+public import Mathlib.Analysis.Normed.Group.Submodule
 
 /-!
 # Normed rings
@@ -16,6 +18,8 @@ In this file we define (semi)normed rings. We also prove some theorems about the
 A normed ring instance can be constructed from a given real absolute value on a ring via
 `AbsoluteValue.toNormedRing`.
 -/
+
+@[expose] public section
 
 -- Guard against import creep.
 assert_not_exists AddChar comap_norm_atTop DilationEquiv Finset.sup_mul_le_mul_sup_of_nonneg
@@ -370,13 +374,31 @@ theorem Finset.nnnorm_prod_le {α : Type*} [NormedCommRing α] [NormOneClass α]
     (f : ι → α) : ‖∏ i ∈ s, f i‖₊ ≤ ∏ i ∈ s, ‖f i‖₊ :=
   (s.norm_prod_le f).trans_eq <| by simp [NNReal.coe_prod]
 
+lemma norm_natAbs (z : ℤ) :
+    ‖(z.natAbs : α)‖ = ‖(z : α)‖ := by
+  rcases z.natAbs_eq with hz | hz
+  · rw [← Int.cast_natCast, ← hz]
+  · rw [← Int.cast_natCast, ← norm_neg, ← Int.cast_neg, ← hz]
+
+lemma nnnorm_natAbs (z : ℤ) :
+    ‖(z.natAbs : α)‖₊ = ‖(z : α)‖₊ := by
+  simp [← NNReal.coe_inj, -Nat.cast_natAbs, norm_natAbs]
+
+@[simp] lemma norm_intCast_abs (z : ℤ) :
+    ‖((|z| : ℤ) : α)‖ = ‖(z : α)‖ := by
+  simp [← norm_natAbs]
+
+@[simp] lemma nnnorm_intCast_abs (z : ℤ) :
+    ‖((|z| : ℤ) : α)‖₊ = ‖(z : α)‖₊ := by
+  simp [← nnnorm_natAbs]
+
 /-- If `α` is a seminormed ring, then `‖a ^ n‖₊ ≤ ‖a‖₊ ^ n` for `n > 0`.
 See also `nnnorm_pow_le`. -/
 theorem nnnorm_pow_le' (a : α) : ∀ {n : ℕ}, 0 < n → ‖a ^ n‖₊ ≤ ‖a‖₊ ^ n
   | 1, _ => by simp only [pow_one, le_rfl]
   | n + 2, _ => by
     simpa only [pow_succ' _ (n + 1)] using
-      le_trans (nnnorm_mul_le _ _) (mul_le_mul_left' (nnnorm_pow_le' a n.succ_pos) _)
+      le_trans (nnnorm_mul_le _ _) (mul_le_mul_right (nnnorm_pow_le' a n.succ_pos) _)
 
 /-- If `α` is a seminormed ring with `‖1‖₊ = 1`, then `‖a ^ n‖₊ ≤ ‖a‖₊ ^ n`.
 See also `nnnorm_pow_le'`. -/
@@ -602,7 +624,7 @@ instance MulOpposite.instNormedCommRing : NormedCommRing αᵐᵒᵖ where
 theorem IsPowMul.restriction {R S : Type*} [CommRing R] [Ring S] [Algebra R S]
     (A : Subalgebra R S) {f : S → ℝ} (hf_pm : IsPowMul f) :
     IsPowMul fun x : A => f x.val := fun x n hn => by
-  simpa [SubsemiringClass.coe_pow] using hf_pm (↑x) hn
+  simpa using hf_pm (↑x) hn
 
 end NormedCommRing
 
@@ -621,7 +643,7 @@ theorem norm_eq (x : ℝ≥0) : ‖(x : ℝ)‖ = x := by rw [Real.norm_eq_abs, 
 end NNReal
 
 /-- A restatement of `MetricSpace.tendsto_atTop` in terms of the norm. -/
-theorem NormedAddCommGroup.tendsto_atTop [Nonempty α] [Preorder α] [IsDirected α (· ≤ ·)]
+theorem NormedAddCommGroup.tendsto_atTop [Nonempty α] [Preorder α] [IsDirectedOrder α]
     {β : Type*} [SeminormedAddCommGroup β] {f : α → β} {b : β} :
     Tendsto f atTop (𝓝 b) ↔ ∀ ε, 0 < ε → ∃ N, ∀ n, N ≤ n → ‖f n - b‖ < ε :=
   (atTop_basis.tendsto_iff Metric.nhds_basis_ball).trans (by simp [dist_eq_norm])
@@ -629,7 +651,7 @@ theorem NormedAddCommGroup.tendsto_atTop [Nonempty α] [Preorder α] [IsDirected
 /-- A variant of `NormedAddCommGroup.tendsto_atTop` that
 uses `∃ N, ∀ n > N, ...` rather than `∃ N, ∀ n ≥ N, ...`
 -/
-theorem NormedAddCommGroup.tendsto_atTop' [Nonempty α] [Preorder α] [IsDirected α (· ≤ ·)]
+theorem NormedAddCommGroup.tendsto_atTop' [Nonempty α] [Preorder α] [IsDirectedOrder α]
     [NoMaxOrder α] {β : Type*} [SeminormedAddCommGroup β] {f : α → β} {b : β} :
     Tendsto f atTop (𝓝 b) ↔ ∀ ε, 0 < ε → ∃ N, ∀ n, N < n → ‖f n - b‖ < ε :=
   (atTop_basis_Ioi.tendsto_iff Metric.nhds_basis_ball).trans (by simp [dist_eq_norm])
@@ -642,9 +664,21 @@ variable {R₁ R₂ : Type*}
 for a continuous semilinear map to be bounded and this is the main use for this typeclass. -/
 class RingHomIsometric [Semiring R₁] [Semiring R₂] [Norm R₁] [Norm R₂] (σ : R₁ →+* R₂) : Prop where
   /-- The ring homomorphism is an isometry. -/
-  is_iso : ∀ {x : R₁}, ‖σ x‖ = ‖x‖
+  norm_map : ∀ {x : R₁}, ‖σ x‖ = ‖x‖
 
-attribute [simp] RingHomIsometric.is_iso
+@[deprecated (since := "2025-08-03")] alias RingHomIsometric.is_iso := RingHomIsometric.norm_map
+
+attribute [simp] RingHomIsometric.norm_map
+
+@[simp]
+theorem RingHomIsometric.nnnorm_map [SeminormedRing R₁] [SeminormedRing R₂] (σ : R₁ →+* R₂)
+    [RingHomIsometric σ] (x : R₁) : ‖σ x‖₊ = ‖x‖₊ :=
+  NNReal.eq norm_map
+
+@[simp]
+theorem RingHomIsometric.enorm_map [SeminormedRing R₁] [SeminormedRing R₂] (σ : R₁ →+* R₂)
+    [RingHomIsometric σ] (x : R₁) : ‖σ x‖ₑ = ‖x‖ₑ :=
+  congrArg ENNReal.ofNNReal <| nnnorm_map σ x
 
 variable [SeminormedRing R₁]
 
@@ -832,7 +866,6 @@ abbrev NormedCommRing.induced [CommRing R] [NormedRing S] [NonUnitalRingHomClass
 theorem NormOneClass.induced {F : Type*} (R S : Type*) [Ring R] [SeminormedRing S]
     [NormOneClass S] [FunLike F R S] [RingHomClass F R S] (f : F) :
     @NormOneClass R (SeminormedRing.induced R S f).toNorm _ :=
-  -- Porting note: is this `let` a bad idea somehow?
   let _ : SeminormedRing R := SeminormedRing.induced R S f
   { norm_one := (congr_arg norm (map_one f)).trans norm_one }
 
@@ -841,7 +874,6 @@ theorem NormOneClass.induced {F : Type*} (R S : Type*) [Ring R] [SeminormedRing 
 theorem NormMulClass.induced {F : Type*} (R S : Type*) [Ring R] [SeminormedRing S]
     [NormMulClass S] [FunLike F R S] [RingHomClass F R S] (f : F) :
     @NormMulClass R (SeminormedRing.induced R S f).toNorm _ :=
-  -- Porting note: is this `let` a bad idea somehow?
   let _ : SeminormedRing R := SeminormedRing.induced R S f
   { norm_mul x y := (congr_arg norm (map_mul f x y)).trans <| norm_mul _ _ }
 
@@ -881,12 +913,11 @@ noncomputable def toNormedRing {R : Type*} [Ring R] (v : AbsoluteValue R ℝ) : 
   norm := v
   dist x y := v (x - y)
   dist_eq _ _ := rfl
-  dist_self x := by simp only [sub_self, MulHom.toFun_eq_coe, AbsoluteValue.coe_toMulHom, map_zero]
+  dist_self x := by simp only [sub_self, map_zero]
   dist_comm := v.map_sub
   dist_triangle := v.sub_le
   edist_dist x y := rfl
   norm_mul_le x y := (v.map_mul x y).le
-  eq_of_dist_eq_zero := by simp only [MulHom.toFun_eq_coe, AbsoluteValue.coe_toMulHom,
-    AbsoluteValue.map_sub_eq_zero_iff, imp_self, implies_true]
+  eq_of_dist_eq_zero := by simp only [AbsoluteValue.map_sub_eq_zero_iff, imp_self, implies_true]
 
 end AbsoluteValue

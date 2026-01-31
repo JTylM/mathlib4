@@ -2,50 +2,40 @@ import Lake
 
 open Lake DSL
 
-
 /-!
 ## Mathlib dependencies on upstream projects
 -/
 
-require "leanprover-community" / "batteries" @ git "nightly-testing"
+require "leanprover-community" / "batteries" @ git "main"
 require "leanprover-community" / "Qq" @ git "master"
 require "leanprover-community" / "aesop" @ git "master"
-require "leanprover-community" / "proofwidgets" @ git "v0.0.56" -- ProofWidgets should always be pinned to a specific version
+require "leanprover-community" / "proofwidgets" @ git "v0.0.86" -- ProofWidgets should always be pinned to a specific version
   with NameMap.empty.insert `errorOnBuild
     "ProofWidgets not up-to-date. \
     Please run `lake exe cache get` to fetch the latest ProofWidgets. \
     If this does not work, report your issue on the Lean Zulip."
 require "leanprover-community" / "importGraph" @ git "main"
 require "leanprover-community" / "LeanSearchClient" @ git "main"
-require "leanprover-community" / "plausible" @ git "nightly-testing"
+require "leanprover-community" / "plausible" @ git "main"
+
 
 /-!
 ## Options for building mathlib
 -/
 
-/-- These options are used
-* as `leanOptions`, prefixed by `` `weak``, so that `lake build` uses them;
-* as `moreServerArgs`, to set their default value in mathlib
-  (as well as `Archive`, `Counterexamples` and `test`). -/
+/-- These options are used as `leanOptions`, prefixed by `` `weak``, so that
+`lake build` uses them, as well as `Archive` and `Counterexamples`. -/
 abbrev mathlibOnlyLinters : Array LeanOption := #[
-  -- The `docPrime` linter is disabled: https://github.com/leanprover-community/mathlib4/issues/20560
-  ⟨`linter.docPrime, false⟩,
-  ⟨`linter.hashCommand, true⟩,
-  ⟨`linter.oldObtain, true⟩,
-  ⟨`linter.style.cases, true⟩,
-  ⟨`linter.style.cdot, true⟩,
-  ⟨`linter.style.docString, true⟩,
-  ⟨`linter.style.dollarSyntax, true⟩,
+  ⟨`linter.mathlibStandardSet, true⟩,
+  -- Explicitly enable the header linter, since the standard set is defined in `Mathlib.Init`
+  -- but we want to run this linter in files imported by `Mathlib.Init`.
   ⟨`linter.style.header, true⟩,
-  ⟨`linter.style.lambdaSyntax, true⟩,
-  ⟨`linter.style.longLine, true⟩,
+  ⟨`linter.checkInitImports, true⟩,
+  ⟨`linter.allScriptsDocumented, true⟩,
+  ⟨`linter.pythonStyle, true⟩,
   ⟨`linter.style.longFile, .ofNat 1500⟩,
+  -- ⟨`linter.nightlyRegressionSet, true⟩,
   -- `latest_import.yml` uses this comment: if you edit it, make sure that the workflow still works
-  ⟨`linter.style.missingEnd, true⟩,
-  ⟨`linter.style.multiGoal, true⟩,
-  ⟨`linter.style.openClassical, true⟩,
-  ⟨`linter.style.refine, true⟩,
-  ⟨`linter.style.setOption, true⟩
 ]
 
 /-- These options are passed as `leanOptions` to building mathlib, as well as the
@@ -71,25 +61,21 @@ package mathlib where
 
 @[default_target]
 lean_lib Mathlib where
+  -- Enforce Mathlib's default linters and style options.
   leanOptions := mathlibLeanOptions
-  -- Mathlib also enforces these linter options, which are not active by default.
-  moreServerOptions := mathlibOnlyLinters
 
 -- NB. When adding further libraries, check if they should be excluded from `getLeanLibs` in
 -- `scripts/mk_all.lean`.
 lean_lib Cache
-lean_lib LongestPole
 
 lean_lib MathlibTest where
   globs := #[.submodules `MathlibTest]
 
 lean_lib Archive where
   leanOptions := mathlibLeanOptions
-  moreServerOptions := mathlibOnlyLinters
 
 lean_lib Counterexamples where
   leanOptions := mathlibLeanOptions
-  moreServerOptions := mathlibOnlyLinters
 
 /-- Additional documentation in the form of modules that only contain module docstrings. -/
 lean_lib docs where
@@ -125,41 +111,17 @@ lean_exe mk_all where
   -- Executables which import `Lake` must set `-lLake`.
   weakLinkArgs := #["-lLake"]
 
-/-- `lake exe shake` checks files for unnecessary imports. -/
-lean_exe shake where
-  root := `Shake.Main
-  supportInterpreter := true
-
 /-- `lake exe lint-style` runs text-based style linters. -/
 lean_exe «lint-style» where
   srcDir := "scripts"
-
-/--
-`lake exe pole` queries the Mathlib speedcenter for build times for the current commit,
-and then calculates the longest pole
-(i.e. the sequence of files you would be waiting for during a infinite parallelism build).
--/
-lean_exe pole where
-  root := `LongestPole.Main
   supportInterpreter := true
   -- Executables which import `Lake` must set `-lLake`.
   weakLinkArgs := #["-lLake"]
 
-/--
-`lake exe unused module_1 ... module_n` will analyze unused transitive imports in a given sequence.
-The script expects the sequence to be in "reverse order", i.e. files imported later in `Mathlib` should
-come earlier in the sequence.
-
-Outputs a markdown file (called  `unused.md` by default) and a number of `lake exe graph` commands
-highlighting particular ranges of transitively unused imports.
-
-Typically this should be run via `scripts/unused_in_pole.sh`.
--/
-lean_exe unused where
-  root := `LongestPole.Unused
-  supportInterpreter := true
-  -- Executables which import `Lake` must set `-lLake`.
-  weakLinkArgs := #["-lLake"]
+/-- `lake exe check-title-labels` checks if a PR title obeys some basic formatting requirements.
+Currently, these checks are quite lenient, but could be made stricter in the future. -/
+lean_exe «check_title_labels» where
+  srcDir := "scripts"
 
 lean_exe mathlib_test_executable where
   root := `MathlibTest.MathlibTestExecutable
@@ -174,10 +136,31 @@ update its toolchain to match Mathlib's and fetch the new cache.
 -/
 post_update pkg do
   let rootPkg ← getRootPackage
-  if rootPkg.name = pkg.name then
+  if rootPkg.baseName = pkg.baseName then
     return -- do not run in Mathlib itself
   if (← IO.getEnv "MATHLIB_NO_CACHE_ON_UPDATE") != some "1" then
+    -- Check if Lake version matches toolchain version
+    let toolchainFile := rootPkg.dir / "lean-toolchain"
+    let toolchainContent ← IO.FS.readFile toolchainFile
+    let toolchainVersion := match toolchainContent.trimAscii.copy.splitOn ":" with
+      | [_, version] => version
+      | _ => toolchainContent.trimAscii.copy  -- fallback to full content if format is unexpected
+    -- Lean.versionString does not start with a `v`, while the `lean-toolchain` file is flexible.
+    let toolchainVersion := (toolchainVersion.dropPrefix "v").copy
+    if Lean.versionString ≠ toolchainVersion then
+      IO.println s!"Not running `lake exe cache get` yet, as \
+        the `lake` version ({Lean.versionString}) does not match \
+        the toolchain version ({toolchainVersion}) in the project.\n\
+        You should run `lake exe cache get` manually."
+      return
     let exeFile ← runBuild cache.fetch
-    let exitCode ← env exeFile.toString #["get"]
+    -- Run the command in the root package directory,
+    -- which is the one that holds the .lake folder and lean-toolchain file.
+    let cwd ← IO.Process.getCurrentDir
+    let exitCode ← try
+      IO.Process.setCurrentDir rootPkg.dir
+      env exeFile.toString #["get"]
+    finally
+      IO.Process.setCurrentDir cwd
     if exitCode ≠ 0 then
-      error s!"{pkg.name}: failed to fetch cache"
+      error s!"{pkg.baseName}: failed to fetch cache"

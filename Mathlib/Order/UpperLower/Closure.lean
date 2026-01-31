@@ -3,8 +3,11 @@ Copyright (c) 2022 Yaël Dillies, Sara Rousta. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Yaël Dillies, Sara Rousta
 -/
-import Mathlib.Order.Interval.Set.OrdConnected
-import Mathlib.Order.UpperLower.Principal
+module
+
+public import Mathlib.Order.Interval.Set.OrdConnected
+public import Mathlib.Order.Minimal
+public import Mathlib.Order.UpperLower.Principal
 
 /-!
 # Upper and lower closures
@@ -19,12 +22,13 @@ they are equivalent to a union over principal upper (lower) sets, as shown in `c
 * `lowerClosure`: The least lower set containing a set.
 -/
 
+@[expose] public section
+
 open OrderDual Set
 
 variable {α β : Type*} {ι : Sort*}
 
-section closure
-
+section Preorder
 variable [Preorder α] [Preorder β] {s t : Set α} {x : α}
 
 /-- The greatest upper set containing a given set. -/
@@ -261,7 +265,42 @@ protected alias ⟨BddBelow.of_upperClosure, BddBelow.upperClosure⟩ := bddBelo
     ↑(lowerClosure s) = s ↔ IsLowerSet s :=
   @upperClosure_eq αᵒᵈ _ _
 
-end closure
+end Preorder
+
+section PartialOrder
+variable [PartialOrder α] {s : Set α} {x : α}
+
+lemma IsAntichain.minimal_mem_upperClosure_iff_mem (hs : IsAntichain (· ≤ ·) s) :
+    Minimal (· ∈ upperClosure s) x ↔ x ∈ s := by
+  simp only [upperClosure, UpperSet.mem_mk, mem_setOf_eq]
+  refine ⟨fun h ↦ ?_, fun h ↦ ⟨⟨x, h, rfl.le⟩, fun b ⟨a, has, hab⟩ hbx ↦ ?_⟩⟩
+  · obtain ⟨a, has, hax⟩ := h.prop
+    rwa [h.eq_of_ge ⟨a, has, rfl.le⟩ hax]
+  rwa [← hs.eq has h (hab.trans hbx)]
+
+lemma IsAntichain.maximal_mem_lowerClosure_iff_mem (hs : IsAntichain (· ≤ ·) s) :
+    Maximal (· ∈ lowerClosure s) x ↔ x ∈ s :=
+  hs.to_dual.minimal_mem_upperClosure_iff_mem
+
+end PartialOrder
+
+section LinearOrder
+
+variable [LinearOrder α]
+
+lemma upperClosure_eq_bot {s : Set α} (hs : ¬ BddBelow s) : upperClosure s = ⊥ :=
+  le_bot_iff.mp fun x _ ↦ ⟨_, (not_bddBelow_iff.mp hs x).choose_spec.imp id le_of_lt⟩
+
+lemma upperClosure_eq_bot_iff [NoMinOrder α] {s : Set α} : upperClosure s = ⊥ ↔ ¬ BddBelow s :=
+  ⟨fun h₁ h₂ ↦ by simpa [h₁] using bddBelow_upperClosure.mpr h₂, upperClosure_eq_bot⟩
+
+lemma lowerClosure_eq_top {s : Set α} (hs : ¬ BddAbove s) : lowerClosure s = ⊤ :=
+  SetLike.coe_injective congr($(upperClosure_eq_bot (α := αᵒᵈ) hs).1)
+
+lemma lowerClosure_eq_top_iff [NoMaxOrder α] {s : Set α} : lowerClosure s = ⊤ ↔ ¬ BddAbove s :=
+  ⟨fun h₁ h₂ ↦ by simpa [h₁] using bddAbove_lowerClosure.mpr h₂, lowerClosure_eq_top⟩
+
+end LinearOrder
 
 /-! ### Set Difference -/
 
@@ -329,12 +368,12 @@ end LowerSet
 namespace UpperSet
 variable [Preorder α] {s : UpperSet α} {t : Set α} {a : α}
 
-/-- The biggest upper subset of a upper set `s` disjoint from a set `t`. -/
+/-- The biggest upper subset of an upper set `s` disjoint from a set `t`. -/
 def sdiff (s : UpperSet α) (t : Set α) : UpperSet α where
   carrier := s \ lowerClosure t
   upper' := s.upper.sdiff_of_isLowerSet (lowerClosure t).lower
 
-/-- The biggest upper subset of a upper set `s` not containing an element `a`. -/
+/-- The biggest upper subset of an upper set `s` not containing an element `a`. -/
 def erase (s : UpperSet α) (a : α) : UpperSet α where
   carrier := s \ LowerSet.Iic a
   upper' := s.upper.sdiff_of_isLowerSet (LowerSet.Iic a).lower
@@ -357,9 +396,9 @@ lemma le_erase : s ≤ s.erase a := diff_subset
 @[simp] lemma erase_eq : s.erase a = s ↔ a ∉ s := by rw [← sdiff_singleton]; simp [-sdiff_singleton]
 
 @[simp] lemma lt_sdiff_left : s < s.sdiff t ↔ ¬ Disjoint ↑s t :=
-  le_sdiff_left.gt_iff_ne.trans UpperSet.sdiff_eq_left.not
+  le_sdiff_left.lt_iff_ne'.trans UpperSet.sdiff_eq_left.not
 
-@[simp] lemma lt_erase : s < s.erase a ↔ a ∈ s := le_erase.gt_iff_ne.trans erase_eq.not_left
+@[simp] lemma lt_erase : s < s.erase a ↔ a ∈ s := le_erase.lt_iff_ne'.trans erase_eq.not_left
 
 @[simp] protected lemma sdiff_idem (s : UpperSet α) (t : Set α) : (s.sdiff t).sdiff t = s.sdiff t :=
   SetLike.coe_injective sdiff_idem
