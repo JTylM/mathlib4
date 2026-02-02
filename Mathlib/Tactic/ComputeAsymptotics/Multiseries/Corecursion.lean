@@ -87,7 +87,7 @@ local instance : CompleteSpace (Seq α) := by
     (Metric.ball_mem_nhds _ (by positivity))
   simp only [Metric.ball, Set.mem_setOf_eq] at hts
   rw [← PiNat.apply_eq_of_dist_lt hts (by simp)] at hn
-  rw [← PiNat.apply_eq_of_dist_lt hts (by rfl)]
+  rw [← PiNat.apply_eq_of_dist_lt hts le_rfl]
   exact ht hn
 
 theorem Stream'.dist_le_one (s t : Stream' α) : dist s t ≤ 1 := by
