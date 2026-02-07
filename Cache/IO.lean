@@ -499,6 +499,7 @@ def leanModulesFromSpec (sp : SearchPath) (argₛ : String) :
   else
     -- provided a module
     -- user might provide `.*` or `.+` to include folders
+    -- TODO: parsing with `Lake.Glob.ofString?` `glob.forEachModuleIn` and would be more stable
     let pattern := argₛ.takeEnd 2 |>.toString
     let mod := (if #[".+", ".*"].contains pattern then argₛ.dropEnd 2 else argₛ).toName
     if mod.isAnonymous then
